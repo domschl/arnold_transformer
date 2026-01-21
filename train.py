@@ -34,7 +34,7 @@ if not text:
     print("Error: No text found in dataset directory!")
     exit(1)
 
-tokenizer = Tokenizer(text)
+tokenizer = Tokenizer()
 vocab_size = tokenizer.vocab_size
 
 # Create data loader

@@ -1,7 +1,8 @@
 
 import os
 import torch
-import random
+import tiktoken
+import numpy as np
 
 def load_text_data(directory):
     """
@@ -21,19 +22,22 @@ def load_text_data(directory):
     return text
 
 class Tokenizer:
-    def __init__(self, text):
-        # Create a mapping from characters to integers
-        self.chars = sorted(list(set(text)))
-        self.vocab_size = len(self.chars)
-        self.stoi = { ch:i for i,ch in enumerate(self.chars) }
-        self.itos = { i:ch for i,ch in enumerate(self.chars) }
-        print(f"Tokenizer initialized with vocab size: {self.vocab_size}")
+    def __init__(self, text=None):
+        # We use GPT-2 encoding
+        self.enc = tiktoken.get_encoding("gpt2")
+        # Pad vocab size to 50304 (multiple of 64) for efficiency
+        self.vocab_size = 50304 
+        self.eot_token = self.enc.eot_token
+        print(f"Tiktoken tokenizer initialized. Native vocab: {self.enc.n_vocab}, Padded to: {self.vocab_size}")
 
     def encode(self, s):
-        return [self.stoi[c] for c in s]
+        # Allow special tokens if needed, but for now just standard encode
+        return self.enc.encode(s, allowed_special={'<|endoftext|>'})
 
     def decode(self, l):
-        return ''.join([self.itos[i] for i in l])
+        # Filter out potential padding tokens if any were generated (though we won't train on them)
+        l = [x for x in l if x < self.enc.n_vocab]
+        return self.enc.decode(l)
 
 class DataLoader:
     def __init__(self, text, tokenizer, block_size, batch_size, device='cpu', train_split=0.9):
@@ -43,7 +47,11 @@ class DataLoader:
         self.device = device
         
         # Encode the entire text
-        data = torch.tensor(self.tokenizer.encode(text), dtype=torch.long)
+        print("Encoding text data (this might take a moment)...")
+        # Use numpy for efficient storage before tensor conversion
+        encoded = self.tokenizer.encode(text)
+        data = torch.tensor(encoded, dtype=torch.long)
+        print(f"Encoded {len(data)} tokens.")
         
         # Split into train and validation
         n = int(train_split * len(data))
@@ -66,8 +74,9 @@ if __name__ == "__main__":
     if not raw_text:
         print("No text found. Make sure 'dataset' directory exists and has .txt files.")
     else:
-        print(f"Loaded {len(raw_text)} characters")
-        tokenizer = Tokenizer(raw_text)
+        # Just use a subset for quick test
+        raw_text = raw_text[:10000]
+        tokenizer = Tokenizer() # No need to pass text for vocabulary building anymore
         loader = DataLoader(raw_text, tokenizer, block_size=8, batch_size=4)
         xb, yb = loader.get_batch('train')
         print("Batch shape:", xb.shape)
