@@ -4,6 +4,8 @@ A PyTorch implementation of a GPT-style Transformer built from scratch. This pro
 
 > sail your transformer to the edge of chaos and beyond...
 
+We are going to use a non-linear activation function in its chaotic regime in the middle of a rather standard transformer stack. By carefully steering the chaotic behavior we receive greater expressivity due to the ability of the ArnoldActivation to learn its own coupling-strength parameter $K$.
+
 ## 🌟 Arnold Activation
 
 The Arnold Activation is based on the **Circle Map** (also known as the Arnold Circle Map), a classic example from chaos theory that exhibits phase-locking and chaotic behavior.
