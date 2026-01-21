@@ -126,12 +126,11 @@ class GPT(nn.Module):
 
     def get_max_lyapunov(self):
         max_lyap = -float('inf')
-        if self.activation_type != 'arnold':
-            return 0.0
             
-        for block in self.blocks:
-            if hasattr(block.ffwd, 'activation'):
-                 max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
+        for index, block in enumerate(self.blocks):
+            if self.activation_types[index] == 'arnold':
+                if hasattr(block.ffwd, 'activation'):
+                     max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
         if max_lyap < -10:
             max_lyap = 0.0
         return max_lyap
