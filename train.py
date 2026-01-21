@@ -20,7 +20,8 @@ n_embd = 384
 n_head = 8
 n_layer = 8
 dropout = 0.1
-activation_type = 'relu' # or 'relu' or 'arnold'
+activation_types = ['relu'] * 8 # or 'relu' or 'arnold'
+activation_types[4] = 'arnold'
 lyapunov_gov_beta = 10
 # ------------
 
@@ -40,7 +41,7 @@ vocab_size = tokenizer.vocab_size
 train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, train_split=0.9)
 
 # Model
-model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_type=activation_type)
+model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=activation_types)
 m = model.to(device)
 # print the number of parameters in the model
 print(str(sum(p.numel() for p in m.parameters())/1e6) + ' M parameters')

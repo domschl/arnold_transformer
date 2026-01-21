@@ -107,16 +107,20 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_type='relu'):
+    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None):
         super().__init__()
         self.device = device
         self.block_size = block_size
-        self.activation_type = activation_type
-        
+        if activation_types is None:
+            activation_types = ['relu'] * n_layer
+        self.activation_types = activation_types
+        if len(activation_types) != n_layer:
+            raise ValueError("activation_types must have length equal to n_layer")
+            
         # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(*[Block(n_embd, n_head, block_size, dropout, activation_type=activation_type) for _ in range(n_layer)])
+        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, activation_type=activation_types[i]) for i in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
@@ -139,7 +143,8 @@ class GPT(nn.Module):
         tok_emb = self.token_embedding_table(idx) # (B,T,C)
         pos_emb = self.position_embedding_table(torch.arange(T, device=self.device)) # (T,C)
         x = tok_emb + pos_emb # (B,T,C)
-        x = self.blocks(x) # (B,T,C)
+        for block in self.blocks:
+            x = block(x)
         x = self.ln_f(x) # (B,T,C)
         logits = self.lm_head(x) # (B,T,vocab_size)
 
