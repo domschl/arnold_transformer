@@ -9,19 +9,18 @@ from model import GPT
 # Hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel?
 block_size = 256 # what is the maximum context length for predictions?
-max_iters = 5000
-eval_interval = 50
-learning_rate = 3e-4
+max_iters = 10000
+eval_interval = 500
+learning_rate = 1e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
 eval_iters = 50
-n_embd = 256
+n_embd = 384
 n_head = 8
-n_layer = 4
+n_layer = 8
 dropout = 0.1
-activation_type = 'arnold' # or 'relu'
-lyapunov_gov = True
+activation_type = 'relu' # or 'relu' or 'arnold'
 lyapunov_gov_beta = 10
 # ------------
 
@@ -94,7 +93,7 @@ for iter in range(max_iters):
     optimizer.step()
 
     # Lyapunov Governor
-    if lyapunov_gov:
+    if activation_type == 'arnold':
         max_lyap = model.get_max_lyapunov()
         # decay LR based on chaos (clamp at 0 for gov, but log true value)
         # Formula: exp(-max(0, lyap) * beta)
