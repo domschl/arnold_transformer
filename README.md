@@ -83,7 +83,6 @@ n_layer = 16
 activation_types = ['relu'] * n_layer
 middle = n_layer // 2
 activation_types[middle] = 'arnold'
-activation_types[middle+1] = 'arnold'
 # ...
 ```
 
@@ -92,4 +91,3 @@ activation_types[middle+1] = 'arnold'
 - `model.py`: The GPT architecture and `ArnoldActivation` implementation.
 - `train.py`: Training loop, hyperparameter config, and Lyapunov governor logic.
 - `data_loader.py`: Handles loading text files and tokenization (using `tiktoken`).
-- `arnold_activation.py`: Reference implementation and standalone visualization of the concept.

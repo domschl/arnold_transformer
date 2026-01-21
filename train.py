@@ -23,8 +23,8 @@ dropout = 0.1
 activation_types = ['relu'] * n_layer # or 'relu' or 'arnold'
 middle = n_layer // 2
 activation_types[middle] = 'arnold'
-activation_types[middle+1] = 'arnold'
-activation_types[middle-1] = 'arnold'
+# activation_types[middle+1] = 'arnold'
+# activation_types[middle-1] = 'arnold'
 arnold_used = True
 lyapunov_gov_beta = 10
 # ------------
