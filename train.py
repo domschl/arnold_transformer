@@ -27,6 +27,7 @@ activation_types[middle] = 'arnold'
 # activation_types[middle-1] = 'arnold'
 arnold_used = True
 lyapunov_gov_beta = 10
+lyapunov_dampening_offset = 0.0
 # ------------
 
 torch.manual_seed(1337)
@@ -102,7 +103,7 @@ for iter in range(max_iters):
         max_lyap = model.get_max_lyapunov()
         # decay LR based on chaos (clamp at 0 for gov, but log true value)
         # Formula: exp(-max(0, lyap) * beta)
-        new_lr = learning_rate * math.exp(-max(0, max_lyap) * lyapunov_gov_beta)
+        new_lr = learning_rate * math.exp(-max(0, max_lyap + lyapunov_dampening_offset) * lyapunov_gov_beta)
         for param_group in optimizer.param_groups:
             param_group['lr'] = new_lr
 
