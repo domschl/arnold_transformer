@@ -9,19 +9,22 @@ from model import GPT
 # Hyperparameters
 batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 128 # what is the maximum context length for predictions?
-max_iters = 10000
+max_iters = 100000
 eval_interval = 500
-learning_rate = 1e-4
+learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
 eval_iters = 50
-n_embd = 256
-n_head = 8
-n_layer = 8
+n_embd = 384
+n_head = 16
+n_layer = 16
 dropout = 0.1
-activation_types = ['relu'] * 8 # or 'relu' or 'arnold'
-activation_types[4] = 'arnold'
+activation_types = ['relu'] * n_layer # or 'relu' or 'arnold'
+middle = n_layer // 2
+activation_types[middle] = 'arnold'
+activation_types[middle+1] = 'arnold'
+activation_types[middle-1] = 'arnold'
 arnold_used = True
 lyapunov_gov_beta = 10
 # ------------
