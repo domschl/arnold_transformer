@@ -2,6 +2,8 @@
 
 A PyTorch implementation of a GPT-style Transformer built from scratch. This project serves as a testbed for the experimental **Arnold Activation** function.
 
+> sail your transformer to the edge of chaos and beyond...
+
 ## 🌟 Arnold Activation
 
 The Arnold Activation is based on the **Circle Map** (also known as the Arnold Circle Map), a classic example from chaos theory that exhibits phase-locking and chaotic behavior.
