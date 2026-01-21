@@ -19,7 +19,7 @@ eval_iters = 50
 n_embd = 384
 n_head = 16
 n_layer = 16
-dropout = 0.1
+dropout = 0.2
 activation_types = ['relu'] * n_layer # or 'relu' or 'arnold'
 middle = n_layer // 2
 activation_types[middle] = 'arnold'
@@ -51,7 +51,7 @@ m = model.to(device)
 print(str(sum(p.numel() for p in m.parameters())/1e6) + ' M parameters')
 
 # Optimizer
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-1)
 
 @torch.no_grad()
 def estimate_loss():
