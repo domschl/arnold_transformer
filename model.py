@@ -70,6 +70,7 @@ class MultiHeadAttention(nn.Module):
         self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout) for _ in range(num_heads)])
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
+        self.attention_type = 'standard'
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1)
@@ -112,6 +113,7 @@ class ArnoldAttentionLayer(nn.Module):
         self.d_model = d_model
         self.n_heads = n_heads
         self.d_k = d_model // n_heads
+        self.attention_type = 'arnold'
         
         # Projections for Q, K, V
         self.w_q = nn.Linear(d_model, d_model)
@@ -208,10 +210,10 @@ class GPT(nn.Module):
             if self.activation_types[index] == 'arnold':
                 if hasattr(block.ffwd, 'activation'):
                     max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
-          #   if self.attention_types is not None and self.attention_types[index] == 'arnold':
-          #       if block.sa.attention_type == 'arnold':
-          #           for index, head in enumerate(block.sa.heads):
-          #               max_lyap = max(max_lyap, head.arnold_attention.arnold.current_lyapunov)
+            if self.attention_types is not None and self.attention_types[index] == 'arnold':
+                if block.sa.attention_type == 'arnold':
+                    max_lyap = max(max_lyap, block.sa.arnold_q.current_lyapunov)
+                    max_lyap = max(max_lyap, block.sa.arnold_k.current_lyapunov)
                     
         if max_lyap < -10:
             max_lyap = 0.0
@@ -224,10 +226,10 @@ class GPT(nn.Module):
             if self.activation_types[index] == 'arnold':
                 if hasattr(block.ffwd, 'activation'):
                     k_act.append(block.ffwd.activation.K.item())
-          #   if self.attention_types is not None and self.attention_types[index] == 'arnold':
-          #       if block.sa.attention_type == 'arnold':
-          #           for index, head in enumerate(block.sa.heads):
-          #               k_att.append(head.arnold_attention.arnold.K.item())                    
+            if self.attention_types is not None and self.attention_types[index] == 'arnold':
+                if block.sa.attention_type == 'arnold':
+                    k_att.append(block.sa.arnold_q.K.item())                    
+                    k_att.append(block.sa.arnold_k.K.item())                    
         return k_act, k_att
 
     def forward(self, idx, targets=None):

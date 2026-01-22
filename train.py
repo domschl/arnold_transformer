@@ -135,28 +135,22 @@ for iter in range(max_iters):
         for param_group in optimizer.param_groups:
             param_group['lr'] = new_lr
 
-        if iter % 10 == -1:
+        if iter % 50 == 0:
             # Collect K values
-            if False:
-                k_act, k_att = model.get_min_max_K()
-                k_min = 1000.0
-                k_max = -1000.0
-                kn = 0
-                ks = 0.0
-                for i in range(n_layer):
-                    for j in range(n_head):
-                        kij=k_att[i*n_layer+j]
-                        ks += kij
-                        kn += 1
-                        if kij<k_min:
-                            k_min = kij
-                        if kij>k_max:
-                            k_max = kij
-                k_mean = ks / kn
-            else:
-                k_min=0
-                k_max=0
-                k_mean=0
+            k_act, k_att = model.get_min_max_K()
+            k_min = 1000.0
+            k_max = -1000.0
+            kn = 0
+            ks = 0.0
+            for i in range(len(k_att)):
+                    ki=k_att[i]
+                    ks += ki
+                    kn += 1
+                    if ki<k_min:
+                        k_min = ki
+                    if ki>k_max:
+                        k_max = ki
+            k_mean = ks / kn
             print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}, K_min,max,avg = {k_min:.3f},{k_max:.3f},{k_mean:.3f}")
                     # print(f"{kij:.3f} ", end="")
                 # print()
