@@ -119,7 +119,7 @@ for iter in range(max_iters):
     optimizer.step()
 
     # Lyapunov Governor
-    if arnold_used is True # or arnold_att_used or positional_encoding=='arnold':
+    if arnold_used is True: # or arnold_att_used or positional_encoding=='arnold':
         max_lyap = model.get_max_lyapunov()
         # decay LR based on chaos (clamp at 0 for gov, but log true value)
         # Formula: exp(-max(0, lyap) * beta)
