@@ -122,10 +122,14 @@ class Block(nn.Module):
         self.ffwd = FeedForward(n_embd, dropout, activation_type=activation_type)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
+        self.attention_type = attention_type
 
     def forward(self, x):
-        x = x + self.sa(self.ln1(x))
-        x = x + self.ffwd(self.ln2(x))
+        if self.attention_type == 'arnold':
+            x = self.sa(x)
+        else:
+            x = x + self.sa(self.ln1(x))
+            x = x + self.ffwd(self.ln2(x))
         return x
 
 class GPT(nn.Module):
@@ -167,6 +171,19 @@ class GPT(nn.Module):
         if max_lyap < -10:
             max_lyap = 0.0
         return max_lyap
+
+    def get_min_max_K(self) -> tuple[list[float],list[float]]:
+        k_act:list[float]=[]
+        k_att:list[float]=[]
+        for index, block in enumerate(self.blocks):
+            if self.activation_types[index] == 'arnold':
+                if hasattr(block.ffwd, 'activation'):
+                    k_act.append(block.ffwd.activation.K.item())
+            if self.attention_types is not None and self.attention_types[index] == 'arnold':
+                if block.sa.attention_type == 'arnold':
+                    for index, head in enumerate(block.sa.heads):
+                        k_att.append(head.arnold_attention.arnold.K.item())                    
+        return k_act, k_att
 
     def forward(self, idx, targets=None):
         B, T = idx.shape

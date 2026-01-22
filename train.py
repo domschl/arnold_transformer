@@ -18,11 +18,11 @@ if torch.backends.mps.is_available():
 eval_iters = 50
 n_embd = 256
 n_head = 16
-n_layer = 24
+n_layer = 4
 dropout = 0.1
 activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
 attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
-positional_encoding = 'arnold' # 'standard' or 'arnold'
+positional_encoding = 'standard' # 'standard' or 'arnold'
 middle = n_layer // 2
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
@@ -129,15 +129,12 @@ for iter in range(max_iters):
 
         if iter % 10 == 0:
             # Collect K values
-            k_values = []
-            for block in model.blocks:
-                if hasattr(block.ffwd, 'activation'):
-                    k_values.append(block.ffwd.activation.K.item())
-            
-            if k_values:
-                k_min, k_max, k_mean = min(k_values), max(k_values), sum(k_values)/len(k_values)
-                print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}, K(min/max/avg) = {k_min:.3f}/{k_max:.3f}/{k_mean:.3f}")
-            else:
-                 print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}")
+            k_act, k_att = model.get_min_max_K()
+            print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}")
+            for i in range(n_layer):
+                for j in range(n_head):
+                    kij=k_att[i*n_layer+j]
+                    print(f"{kij:.3f} ", end="")
+                print()
 
 print(f"Training finished in {time.time() - start_time:.2f} seconds")
