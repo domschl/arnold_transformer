@@ -20,9 +20,9 @@ n_embd = 256
 n_head = 16
 n_layer = 4
 dropout = 0.1
-activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
+activation_types = ['arnold'] * n_layer # 'relu' or 'arnold'
 attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
-positional_encoding = 'standard' # 'standard' or 'arnold'
+positional_encoding = 'arnold' # 'standard' or 'arnold'
 middle = n_layer // 2
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
@@ -45,8 +45,8 @@ for att in attention_types:
         raise ValueError("Must be 'standard' or 'arnold'")
 if positional_encoding not in ['standard', 'arnold']:
     ValueError("Must be 'standard' or 'arnold'")
-lyapunov_gov_beta = 25
-lyapunov_dampening_offset = -0.02
+lyapunov_gov_beta = 5
+lyapunov_dampening_offset = -5
 # ------------
 
 torch.manual_seed(1337)
@@ -131,11 +131,22 @@ for iter in range(max_iters):
         if iter % 10 == 0:
             # Collect K values
             k_act, k_att = model.get_min_max_K()
-            print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}")
+            k_min = 1000.0
+            k_max = -1000.0
+            kn = 0
+            ks = 0.0
             for i in range(n_layer):
                 for j in range(n_head):
                     kij=k_att[i*n_layer+j]
-                    print(f"{kij:.3f} ", end="")
-                print()
+                    ks += kij
+                    kn += 1
+                    if kij<k_min:
+                        k_min = kij
+                    if kij>k_max:
+                        k_max = kij
+            k_mean = ks / kn
+            print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}, K_min,max,avg = {k_min:.3f},{k_max:.3f},{k_mean:.3f}")
+                    # print(f"{kij:.3f} ", end="")
+                # print()
 
 print(f"Training finished in {time.time() - start_time:.2f} seconds")
