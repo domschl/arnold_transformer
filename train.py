@@ -16,11 +16,13 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
 eval_iters = 50
-n_embd = 384
+n_embd = 128
 n_head = 16
-n_layer = 24
+n_layer = 3
 dropout = 0.1
-activation_types = ['relu'] * n_layer # or 'relu' or 'arnold'
+activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
+attention_types = ['standard'] * n_layer # 'standard' or 'arnold'
+positional_encoding = 'arnold' # 'standard' or 'arnold'
 middle = n_layer // 2
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
@@ -29,6 +31,20 @@ arnold_used = False
 for act in activation_types:
     if act == 'arnold':
         arnold_used = True
+    elif act == 'relu':
+        pass
+    else:
+        raise ValueError("Must be 'relu' or 'arnold'")
+arnold_att_used = False
+for att in attention_types:
+    if att == 'arnold':
+        arnold_att_used = True
+    elif att == 'standard':
+        pass
+    else:
+        raise ValueError("Must be 'standard' or 'arnold'")
+if positional_encoding not in ['standard', 'arnold']:
+    ValueError("Must be 'standard' or 'arnold'")
 lyapunov_gov_beta = 10
 lyapunov_dampening_offset = 0.1
 # ------------
@@ -49,7 +65,8 @@ vocab_size = tokenizer.vocab_size
 train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, train_split=0.9)
 
 # Model
-model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=activation_types)
+model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
+            activation_types=activation_types, attention_types=attention_types, positional_encoding=positional_encoding)
 m = model.to(device)
 # print the number of parameters in the model
 print(str(sum(p.numel() for p in m.parameters())/1e6) + ' M parameters')
@@ -102,7 +119,7 @@ for iter in range(max_iters):
     optimizer.step()
 
     # Lyapunov Governor
-    if arnold_used is True:
+    if arnold_used is True # or arnold_att_used or positional_encoding=='arnold':
         max_lyap = model.get_max_lyapunov()
         # decay LR based on chaos (clamp at 0 for gov, but log true value)
         # Formula: exp(-max(0, lyap) * beta)
