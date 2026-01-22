@@ -66,7 +66,8 @@ train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, cache
 
 # Model
 model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
-            activation_types=activation_types, attention_types=attention_types, positional_encoding=positional_encoding)
+            activation_types=activation_types, attention_types=attention_types,
+            positional_encoding=positional_encoding, init_K=1.0)
 m = model.to(device)
 # print the number of parameters in the model
 print(str(sum(p.numel() for p in m.parameters())/1e6) + ' M parameters')

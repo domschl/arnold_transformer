@@ -39,7 +39,7 @@ class ArnoldAttention(nn.Module):
 class Head(nn.Module):
     """ one head of self-attention """
 
-    def __init__(self, head_size, n_embd, block_size, dropout, attention_type='standard'):
+    def __init__(self, head_size, n_embd, block_size, dropout, attention_type='standard', init_K=1.0):
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
         self.query = nn.Linear(n_embd, head_size, bias=False)
@@ -48,7 +48,7 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.attention_type = attention_type
         if attention_type == 'arnold':
-            self.arnold_attention = ArnoldAttention(init_K=0.1)
+            self.arnold_attention = ArnoldAttention(init_K=1.0)
         else:
             self.arnold_attention = None
 
@@ -72,9 +72,9 @@ class Head(nn.Module):
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 
-    def __init__(self, num_heads, head_size, n_embd, block_size, dropout, attention_type='standard'):
+    def __init__(self, num_heads, head_size, n_embd, block_size, dropout, attention_type='standard', init_K=1.0):
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout, attention_type=attention_type) for _ in range(num_heads)])
+        self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout, attention_type=attention_type, init_K=init_K) for _ in range(num_heads)])
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
         self.attention_type = attention_type
@@ -114,11 +114,11 @@ class FeedForward(nn.Module):
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
-    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard'):
+    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard', init_K=1.0):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
-        self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout, attention_type=attention_type)
+        self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout, attention_type=attention_type, init_K=init_K)
         self.ffwd = FeedForward(n_embd, dropout, activation_type=activation_type)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
@@ -134,7 +134,7 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None):
+    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None, init_K=1.0):
         super().__init__()
         self.device = device
         self.block_size = block_size
@@ -152,7 +152,7 @@ class GPT(nn.Module):
             self.positional_arnold = ArnoldActivation()
         else:
             self.positional_encoding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, activation_type=activation_types[i], attention_type=attention_types[i]) for i in range(n_layer)])
+        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, activation_type=activation_types[i], attention_type=attention_types[i], init_K=init_K) for i in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
