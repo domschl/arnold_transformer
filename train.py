@@ -46,7 +46,7 @@ for att in attention_types:
 if positional_encoding not in ['standard', 'arnold']:
     ValueError("Must be 'standard' or 'arnold'")
 lyapunov_gov_beta = 25
-lyapunov_dampening_offset = 0.54
+lyapunov_dampening_offset = -0.02
 # ------------
 
 torch.manual_seed(1337)
