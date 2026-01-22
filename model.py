@@ -5,7 +5,7 @@ from torch.nn import functional as F
 import math
 
 class ArnoldActivation(nn.Module):
-    def __init__(self, Omega=0.618, init_K=1.0):
+    def __init__(self, Omega=0.618033988749895   , init_K=1.0):
         super().__init__()
         self.Omega = Omega
         self.K = nn.Parameter(torch.tensor([float(init_K)]))
@@ -23,7 +23,7 @@ class ArnoldActivation(nn.Module):
         return out % 1.0
 
 class ArnoldAttentionPrevious(nn.Module):
-    def __init__(self, Omega=0.618, init_K=1.0):
+    def __init__(self, Omega=0.618033988749895   , init_K=1.0):
         super().__init__()
         self.arnold = ArnoldActivation(Omega, init_K)
 
@@ -108,7 +108,7 @@ class FeedForward(nn.Module):
         x = self.fc2(x)
 
 class ArnoldAttentionLayer(nn.Module):
-    def __init__(self, d_model, n_heads, Omega=0.618, init_K=0.5):
+    def __init__(self, d_model, n_heads, Omega=0.618033988749895   , init_K=0.5):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -158,7 +158,7 @@ class ArnoldAttentionLayer(nn.Module):
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
-    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard', Omega=0.618, init_K=1.0):
+    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard', Omega=0.618033988749895   , init_K=1.0):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
@@ -181,7 +181,7 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None, Omega=0.618, init_K=1.0):
+    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None, Omega=0.618033988749895   , init_K=1.0):
         super().__init__()
         self.device = device
         self.block_size = block_size

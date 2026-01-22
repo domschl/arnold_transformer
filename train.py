@@ -11,7 +11,7 @@ batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 128 # what is the maximum context length for predictions?
 max_iters = 100000
 eval_interval = 500
-learning_rate = 1e-4
+learning_rate = 5e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
@@ -22,11 +22,11 @@ n_layer = 16
 dropout = 0.1
 activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
 attention_types = ['standard'] * n_layer # 'standard' or 'arnold'
-positional_encoding = 'arnold' # 'standard' or 'arnold'
+positional_encoding = 'standard' # 'standard' or 'arnold'
 middle = n_layer // 2
+attention_types[0] = 'arnold'
 attention_types[2] = 'arnold'
-attention_types[7] = 'arnold'
-attention_types[11] = 'arnold'
+attention_types[4] = 'arnold'
 
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
@@ -51,6 +51,8 @@ if positional_encoding not in ['standard', 'arnold']:
     ValueError("Must be 'standard' or 'arnold'")
 lyapunov_gov_beta = 5
 lyapunov_dampening_offset = -5
+Omega = 0.618033988749895
+init_K = 1.0
 # ------------
 
 torch.manual_seed(1337)
@@ -71,7 +73,7 @@ train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, cache
 # Model
 model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
             activation_types=activation_types, attention_types=attention_types,
-            positional_encoding=positional_encoding, init_K=1.0)
+            positional_encoding=positional_encoding, Omega=Omega, init_K=init_K)
 m = model.to(device)
 
 print(model)
