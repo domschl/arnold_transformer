@@ -18,12 +18,16 @@ if torch.backends.mps.is_available():
 eval_iters = 50
 n_embd = 256
 n_head = 16
-n_layer = 4
+n_layer = 16
 dropout = 0.1
-activation_types = ['arnold'] * n_layer # 'relu' or 'arnold'
-attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
+activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
+attention_types = ['standard'] * n_layer # 'standard' or 'arnold'
 positional_encoding = 'arnold' # 'standard' or 'arnold'
 middle = n_layer // 2
+attention_types[2] = 'arnold'
+attention_types[7] = 'arnold'
+attention_types[11] = 'arnold'
+
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
 # activation_types[middle-1] = 'arnold'
@@ -69,6 +73,9 @@ model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device,
             activation_types=activation_types, attention_types=attention_types,
             positional_encoding=positional_encoding, init_K=1.0)
 m = model.to(device)
+
+print(model)
+
 # print the number of parameters in the model
 print(str(sum(p.numel() for p in m.parameters())/1e6) + ' M parameters')
 
@@ -128,23 +135,28 @@ for iter in range(max_iters):
         for param_group in optimizer.param_groups:
             param_group['lr'] = new_lr
 
-        if iter % 10 == 0:
+        if iter % 10 == -1:
             # Collect K values
-            k_act, k_att = model.get_min_max_K()
-            k_min = 1000.0
-            k_max = -1000.0
-            kn = 0
-            ks = 0.0
-            for i in range(n_layer):
-                for j in range(n_head):
-                    kij=k_att[i*n_layer+j]
-                    ks += kij
-                    kn += 1
-                    if kij<k_min:
-                        k_min = kij
-                    if kij>k_max:
-                        k_max = kij
-            k_mean = ks / kn
+            if False:
+                k_act, k_att = model.get_min_max_K()
+                k_min = 1000.0
+                k_max = -1000.0
+                kn = 0
+                ks = 0.0
+                for i in range(n_layer):
+                    for j in range(n_head):
+                        kij=k_att[i*n_layer+j]
+                        ks += kij
+                        kn += 1
+                        if kij<k_min:
+                            k_min = kij
+                        if kij>k_max:
+                            k_max = kij
+                k_mean = ks / kn
+            else:
+                k_min=0
+                k_max=0
+                k_mean=0
             print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}, K_min,max,avg = {k_min:.3f},{k_max:.3f},{k_mean:.3f}")
                     # print(f"{kij:.3f} ", end="")
                 # print()

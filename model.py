@@ -22,7 +22,7 @@ class ArnoldActivation(nn.Module):
         out = x + self.Omega - (k_val / (2 * math.pi)) * torch.sin(2 * math.pi * x)
         return out % 1.0
 
-class ArnoldAttention(nn.Module):
+class ArnoldAttentionPrevious(nn.Module):
     def __init__(self, Omega=0.618, init_K=1.0):
         super().__init__()
         self.arnold = ArnoldActivation(Omega, init_K)
@@ -39,18 +39,13 @@ class ArnoldAttention(nn.Module):
 class Head(nn.Module):
     """ one head of self-attention """
 
-    def __init__(self, head_size, n_embd, block_size, dropout, attention_type='standard', init_K=1.0):
+    def __init__(self, head_size, n_embd, block_size, dropout):
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
         self.dropout = nn.Dropout(dropout)
-        self.attention_type = attention_type
-        if attention_type == 'arnold':
-            self.arnold_attention = ArnoldAttention(init_K=1.0)
-        else:
-            self.arnold_attention = None
 
     def forward(self, x):
         B,T,C = x.shape
@@ -58,26 +53,23 @@ class Head(nn.Module):
         q = self.query(x) # (B,T,16)
         v = self.value(x) # (B,T,16)
 
-        if self.attention_type == 'standard':
-            # compute attention scores ("affinities")
-            wei = q @ k.transpose(-2, -1) * C**-0.5 # (B, T, 16) @ (B, 16, T) -> (B, T, T)
-            wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
-            wei = F.softmax(wei, dim=-1) # (B, T, T)
-            wei = self.dropout(wei)
-            out = wei @ v # (B, T, T) @ (B, T, 16) -> (B, T, 16)
-        else:
-            out = self.arnold_attention(q, k, v)
+        # compute attention scores ("affinities")
+        wei = q @ k.transpose(-2, -1) * C**-0.5 # (B, T, 16) @ (B, 16, T) -> (B, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
+        wei = F.softmax(wei, dim=-1) # (B, T, T)
+        wei = self.dropout(wei)
+        out = wei @ v # (B, T, T) @ (B, T, 16) -> (B, T, 16)
         return out
 
+    
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 
-    def __init__(self, num_heads, head_size, n_embd, block_size, dropout, attention_type='standard', init_K=1.0):
+    def __init__(self, num_heads, head_size, n_embd, block_size, dropout):
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout, attention_type=attention_type, init_K=init_K) for _ in range(num_heads)])
+        self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout) for _ in range(num_heads)])
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
-        self.attention_type = attention_type
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1)
@@ -111,14 +103,67 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+        x = self.arnold(x)
+        x = self.fc2(x)
+
+class ArnoldAttentionLayer(nn.Module):
+    def __init__(self, d_model, n_heads, Omega=0.618, init_K=0.5):
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.d_k = d_model // n_heads
+        
+        # Projections for Q, K, V
+        self.w_q = nn.Linear(d_model, d_model)
+        self.w_k = nn.Linear(d_model, d_model)
+        self.w_v = nn.Linear(d_model, d_model)
+        
+        # Arnold Activations for Q and K (one per head or shared)
+        # Learnable K parameters enable the "phase-locking" behavior
+        self.arnold_q = ArnoldActivation(Omega=Omega, init_K=init_K)
+        self.arnold_k = ArnoldActivation(Omega=Omega, init_K=init_K)
+        
+        self.fc_out = nn.Linear(d_model, d_model)
+
+    def forward(self, x, mask=None):
+        batch_size, seq_len, _ = x.shape
+        
+        # 1. Standard Projections
+        q = self.w_q(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
+        k = self.w_k(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
+        v = self.w_v(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
+        
+        # 2. Arnold Phase-Gating (The Associative Memory Step)
+        # This maps the linear projections onto the S1 circle manifold
+        q_phase = self.arnold_q(q)
+        k_phase = self.arnold_k(k)
+        
+        # 3. Phase-Locked Attention Calculation
+        # Similarity is now based on whether token phases are synchronized
+        scores = torch.matmul(q_phase, k_phase.transpose(-2, -1)) / math.sqrt(self.d_k)
+        
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+            
+        attn = torch.softmax(scores, dim=-1)
+        
+        # 4. Value aggregation
+        out = torch.matmul(attn, v)
+        out = out.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
+        
+        return self.fc_out(out)
+
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
-    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard', init_K=1.0):
+    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard', Omega=0.618, init_K=1.0):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
-        self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout, attention_type=attention_type, init_K=init_K)
+        if attention_type == 'arnold':
+            self.sa = ArnoldAttentionLayer(n_embd, n_head, Omega, init_K)
+        else:
+            self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout)
         self.ffwd = FeedForward(n_embd, dropout, activation_type=activation_type)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
@@ -134,7 +179,7 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None, init_K=1.0):
+    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None, Omega=0.618, init_K=1.0):
         super().__init__()
         self.device = device
         self.block_size = block_size
@@ -152,7 +197,7 @@ class GPT(nn.Module):
             self.positional_arnold = ArnoldActivation()
         else:
             self.positional_encoding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, activation_type=activation_types[i], attention_type=attention_types[i], init_K=init_K) for i in range(n_layer)])
+        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, activation_type=activation_types[i], attention_type=attention_types[i], Omega=Omega, init_K=init_K) for i in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
@@ -163,10 +208,10 @@ class GPT(nn.Module):
             if self.activation_types[index] == 'arnold':
                 if hasattr(block.ffwd, 'activation'):
                     max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
-            if self.attention_types is not None and self.attention_types[index] == 'arnold':
-                if block.sa.attention_type == 'arnold':
-                    for index, head in enumerate(block.sa.heads):
-                        max_lyap = max(max_lyap, head.arnold_attention.arnold.current_lyapunov)
+          #   if self.attention_types is not None and self.attention_types[index] == 'arnold':
+          #       if block.sa.attention_type == 'arnold':
+          #           for index, head in enumerate(block.sa.heads):
+          #               max_lyap = max(max_lyap, head.arnold_attention.arnold.current_lyapunov)
                     
         if max_lyap < -10:
             max_lyap = 0.0
@@ -179,10 +224,10 @@ class GPT(nn.Module):
             if self.activation_types[index] == 'arnold':
                 if hasattr(block.ffwd, 'activation'):
                     k_act.append(block.ffwd.activation.K.item())
-            if self.attention_types is not None and self.attention_types[index] == 'arnold':
-                if block.sa.attention_type == 'arnold':
-                    for index, head in enumerate(block.sa.heads):
-                        k_att.append(head.arnold_attention.arnold.K.item())                    
+          #   if self.attention_types is not None and self.attention_types[index] == 'arnold':
+          #       if block.sa.attention_type == 'arnold':
+          #           for index, head in enumerate(block.sa.heads):
+          #               k_att.append(head.arnold_attention.arnold.K.item())                    
         return k_act, k_att
 
     def forward(self, idx, targets=None):
