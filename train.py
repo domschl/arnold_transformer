@@ -21,7 +21,7 @@ n_head = 16
 n_layer = 3
 dropout = 0.1
 activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
-attention_types = ['standard'] * n_layer # 'standard' or 'arnold'
+attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
 positional_encoding = 'arnold' # 'standard' or 'arnold'
 middle = n_layer // 2
 # activation_types[middle] = 'arnold'
@@ -62,7 +62,7 @@ tokenizer = Tokenizer()
 vocab_size = tokenizer.vocab_size
 
 # Create data loader
-train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, train_split=0.9)
+train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, cache_dir=dataset_dir, train_split=0.9)
 
 # Model
 model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
