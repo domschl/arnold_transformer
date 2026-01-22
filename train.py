@@ -18,14 +18,17 @@ if torch.backends.mps.is_available():
 eval_iters = 50
 n_embd = 384
 n_head = 16
-n_layer = 16
+n_layer = 24
 dropout = 0.1
 activation_types = ['relu'] * n_layer # or 'relu' or 'arnold'
 middle = n_layer // 2
-activation_types[middle] = 'arnold'
+# activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
 # activation_types[middle-1] = 'arnold'
-arnold_used = True
+arnold_used = False
+for act in activation_types:
+    if act == 'arnold':
+        arnold_used = True
 lyapunov_gov_beta = 10
 lyapunov_dampening_offset = 0.1
 # ------------
