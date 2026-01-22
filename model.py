@@ -48,7 +48,9 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.attention_type = attention_type
         if attention_type == 'arnold':
-            self.arnold_attention = ArnoldAttention()
+            self.arnold_attention = ArnoldAttention(init_K=0.1)
+        else:
+            self.arnold_attention = None
 
     def forward(self, x):
         B,T,C = x.shape
@@ -75,6 +77,7 @@ class MultiHeadAttention(nn.Module):
         self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout, attention_type=attention_type) for _ in range(num_heads)])
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
+        self.attention_type = attention_type
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1)
@@ -155,7 +158,12 @@ class GPT(nn.Module):
         for index, block in enumerate(self.blocks):
             if self.activation_types[index] == 'arnold':
                 if hasattr(block.ffwd, 'activation'):
-                     max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
+                    max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
+            if self.attention_types is not None and self.attention_types[index] == 'arnold':
+                if block.sa.attention_type == 'arnold':
+                    for index, head in enumerate(block.sa.heads):
+                        max_lyap = max(max_lyap, head.arnold_attention.arnold.current_lyapunov)
+                    
         if max_lyap < -10:
             max_lyap = 0.0
         return max_lyap

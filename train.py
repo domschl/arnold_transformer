@@ -11,14 +11,14 @@ batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 128 # what is the maximum context length for predictions?
 max_iters = 100000
 eval_interval = 500
-learning_rate = 3e-4
+learning_rate = 1e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
 eval_iters = 50
-n_embd = 128
+n_embd = 256
 n_head = 16
-n_layer = 3
+n_layer = 24
 dropout = 0.1
 activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
 attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
@@ -45,8 +45,8 @@ for att in attention_types:
         raise ValueError("Must be 'standard' or 'arnold'")
 if positional_encoding not in ['standard', 'arnold']:
     ValueError("Must be 'standard' or 'arnold'")
-lyapunov_gov_beta = 10
-lyapunov_dampening_offset = 0.1
+lyapunov_gov_beta = 25
+lyapunov_dampening_offset = 0.54
 # ------------
 
 torch.manual_seed(1337)
@@ -119,7 +119,7 @@ for iter in range(max_iters):
     optimizer.step()
 
     # Lyapunov Governor
-    if arnold_used is True: # or arnold_att_used or positional_encoding=='arnold':
+    if arnold_used is True or arnold_att_used is True: # or positional_encoding=='arnold':
         max_lyap = model.get_max_lyapunov()
         # decay LR based on chaos (clamp at 0 for gov, but log true value)
         # Formula: exp(-max(0, lyap) * beta)
