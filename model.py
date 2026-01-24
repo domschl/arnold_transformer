@@ -5,9 +5,10 @@ from torch.nn import functional as F
 import math
 
 class ArnoldActivation(nn.Module):
-    def __init__(self, Omega=0.618033988749895   , init_K=1.0):
+    def __init__(self, Omega=0.618033988749895, Omega_rnd_std=None, init_K=1.0):
         super().__init__()
         self.Omega = Omega
+        self.Omega_rnd_std = Omega_rnd_std
         self.K = nn.Parameter(torch.tensor([float(init_K)]))
         self.current_lyapunov = 0.0
 
@@ -18,14 +19,16 @@ class ArnoldActivation(nn.Module):
         with torch.no_grad():
             deriv = torch.abs(1 - k_val * torch.cos(2 * math.pi * x))
             self.current_lyapunov = torch.log(deriv + 1e-9).mean().item()
-            
-        out = x + self.Omega - (k_val / (2 * math.pi)) * torch.sin(2 * math.pi * x)
+        Omega = self.Omega
+        if self.Omega_rnd_std is not None:
+            Omega += torch.normal(mean=torch.tensor([0.0]), std=torch.tensor([self.Omega_rnd_std])).item() 
+        out = x + Omega - (k_val / (2 * math.pi)) * torch.sin(2 * math.pi * x)
         return out % 1.0
 
 class ArnoldAttentionPrevious(nn.Module):
-    def __init__(self, Omega=0.618033988749895   , init_K=1.0):
+    def __init__(self, Omega=0.618033988749895, Omega_rnd_std=None, init_K=1.0):
         super().__init__()
-        self.arnold = ArnoldActivation(Omega, init_K)
+        self.arnold = ArnoldActivation(Omega, Omega_rnd_std, init_K)
 
     def forward(self, q, k, v):
         # Apply phase-locking to the query and key
@@ -108,7 +111,7 @@ class FeedForward(nn.Module):
         x = self.fc2(x)
 
 class ArnoldAttentionLayer(nn.Module):
-    def __init__(self, d_model, n_heads, Omega=0.618033988749895, init_K=0.5, K_phase=False):
+    def __init__(self, d_model, n_heads, Omega=0.618033988749895, Omega_rnd_std=None, init_K=0.5, K_phase=False):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -123,8 +126,9 @@ class ArnoldAttentionLayer(nn.Module):
         
         # Arnold Activations for Q and K (one per head or shared)
         # Learnable K parameters enable the "phase-locking" behavior
-        self.arnold_q = ArnoldActivation(Omega=Omega, init_K=init_K)
-        self.arnold_k = ArnoldActivation(Omega=Omega, init_K=init_K)
+        self.arnold_q = ArnoldActivation(Omega=Omega, Omega_rnd_std=Omega_rnd_std, init_K=init_K)
+        if K_phase is True:
+            self.arnold_k = ArnoldActivation(Omega=Omega, Omega_rnd_std=Omega_rnd_std, init_K=init_K)
         
         self.fc_out = nn.Linear(d_model, d_model)
 
@@ -139,7 +143,7 @@ class ArnoldAttentionLayer(nn.Module):
         # 2. Arnold Phase-Gating (The Associative Memory Step)
         # This maps the linear projections onto the S1 circle manifold
         q_phase = self.arnold_q(q)
-        if self.K_phase:
+        if self.K_phase is True:
             k_phase = self.arnold_k(k)
         else:
             k_phase = k
@@ -163,13 +167,13 @@ class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
     def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', 
-                 attention_type='standard', Omega=0.618033988749895, init_K=1.0, 
+                 attention_type='standard', Omega=0.618033988749895, Omega_rnd_std=None, init_K=1.0, 
                  residual_attention_mix=False, K_phase=False):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
         if attention_type == 'arnold':
-            self.saa = ArnoldAttentionLayer(n_embd, n_head, Omega, init_K, K_phase)
+            self.saa = ArnoldAttentionLayer(n_embd, n_head, Omega, Omega_rnd_std, init_K, K_phase)
         if attention_type == 'standard' or residual_attention_mix is True:
             self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout)
         self.ffwd = FeedForward(n_embd, dropout, activation_type=activation_type)
@@ -196,7 +200,8 @@ class GPT(nn.Module):
 
     def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
                  activation_types=None, attention_types=None, positional_encoding=None, 
-                 Omega=0.618033988749895, init_K=1.0, residual_attention_mix=False, K_phase=False):
+                 Omega=0.618033988749895, Omega_rnd_std=None, init_K=1.0,
+                 residual_attention_mix=False, K_phase=False):
         super().__init__()
         self.device = device
         self.block_size = block_size
@@ -205,19 +210,20 @@ class GPT(nn.Module):
         self.activation_types = activation_types
         self.attention_types = attention_types
         self.positional_encoding = positional_encoding
+        self.K_phase = K_phase
         if len(activation_types) != n_layer:
             raise ValueError("activation_types must have length equal to n_layer")
             
         # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         if positional_encoding == 'arnold':
-            self.positional_arnold = ArnoldActivation(Omega=Omega, init_K=init_K) # , K_phase=K_phase)
+            self.positional_arnold = ArnoldActivation(Omega=Omega, Omega_rnd_std=Omega_rnd_std, init_K=init_K) # , K_phase=K_phase)
         else:
             self.positional_encoding_table = nn.Embedding(block_size, n_embd)
         self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, 
                                            activation_type=activation_types[i], 
                                            attention_type=attention_types[i], 
-                                           Omega=Omega, init_K=init_K, 
+                                           Omega=Omega, Omega_rnd_std=Omega_rnd_std, init_K=init_K, 
                                            residual_attention_mix=residual_attention_mix, K_phase=K_phase) for i in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
@@ -232,7 +238,8 @@ class GPT(nn.Module):
             if self.attention_types is not None and self.attention_types[index] == 'arnold':
                 if block.saa.attention_type == 'arnold':
                     max_lyap = max(max_lyap, block.saa.arnold_q.current_lyapunov)
-                    max_lyap = max(max_lyap, block.saa.arnold_k.current_lyapunov)                    
+                    if self.K_phase is True:
+                        max_lyap = max(max_lyap, block.saa.arnold_k.current_lyapunov)                    
         if max_lyap < -10:
             max_lyap = 0.0
         return max_lyap
@@ -246,8 +253,9 @@ class GPT(nn.Module):
                     k_act.append(block.ffwd.activation.K.item())
             if self.attention_types is not None and self.attention_types[index] == 'arnold':
                 if block.saa.attention_type == 'arnold':
-                    k_att.append(block.saa.arnold_q.K.item())                    
-                    k_att.append(block.saa.arnold_k.K.item())                    
+                    k_att.append(block.saa.arnold_q.K.item())
+                    if self.K_phase is True:
+                        k_att.append(block.saa.arnold_k.K.item())                    
         return k_act, k_att
 
     def forward(self, idx, targets=None):

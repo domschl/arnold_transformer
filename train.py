@@ -11,11 +11,11 @@ batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 128 # what is the maximum context length for predictions?
 max_iters = 100000
 eval_interval = 500
-learning_rate = 1e-5
+learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
-eval_iters = 50
+eval_iters = 100
 n_embd = 384
 n_head = 16
 n_layer = 24
@@ -26,9 +26,11 @@ positional_encoding = 'standard' # 'standard' or 'arnold'
 residual_attention_mix = False
 K_phase = False
 middle = n_layer // 2
-# attention_types[0] = 'arnold'
-# attention_types[2] = 'arnold'
-# attention_types[4] = 'arnold'
+attention_types[middle - 2] = 'arnold'
+attention_types[middle - 1] = 'arnold'
+attention_types[middle] = 'arnold'
+attention_types[middle + 1] = 'arnold'
+attention_types[middle + 2] = 'arnold'
 
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
@@ -54,7 +56,8 @@ if positional_encoding not in ['standard', 'arnold']:
 lyapunov_gov_beta = 5
 lyapunov_dampening_offset = -5
 Omega = 0.618033988749895
-init_K = 0.1
+Omega_rnd_std = 0.01
+init_K = 0.5
 # ------------
 
 torch.manual_seed(1337)
@@ -75,7 +78,7 @@ train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, cache
 # Model
 model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
             activation_types=activation_types, attention_types=attention_types,
-            positional_encoding=positional_encoding, Omega=Omega, init_K=init_K,
+            positional_encoding=positional_encoding, Omega=Omega, Omega_rnd_std=Omega_rnd_std, init_K=init_K,
             residual_attention_mix=residual_attention_mix, K_phase=K_phase)
 m = model.to(device)
 
@@ -110,6 +113,8 @@ for iter in range(max_iters):
     # every once in a while evaluate the loss on train and val sets
     if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
+        print()
+        print("=" * 50)
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         
         # Save checkpoint
@@ -118,9 +123,9 @@ for iter in range(max_iters):
 
         # Generate sample
         context = torch.zeros((1, 1), dtype=torch.long, device=device)
-        for temperature in [0.6, 0.8, 1.0]:
+        for temperature in [1.0, 1.1, 1.2]:
             print(f"Generating sample at step {iter}, temperature={temperature}...")
-            print(tokenizer.decode(m.generate(context, max_new_tokens=100, temperature=temperature)[0].tolist()))
+            print(tokenizer.decode(m.generate(context, max_new_tokens=128, temperature=temperature)[0].tolist()))
             print("-" * 50)
 
     # sample a batch of data
