@@ -108,12 +108,13 @@ class FeedForward(nn.Module):
         x = self.fc2(x)
 
 class ArnoldAttentionLayer(nn.Module):
-    def __init__(self, d_model, n_heads, Omega=0.618033988749895   , init_K=0.5):
+    def __init__(self, d_model, n_heads, Omega=0.618033988749895, init_K=0.5, K_phase=False):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
         self.d_k = d_model // n_heads
         self.attention_type = 'arnold'
+        self.K_phase = K_phase
         
         # Projections for Q, K, V
         self.w_q = nn.Linear(d_model, d_model)
@@ -138,7 +139,10 @@ class ArnoldAttentionLayer(nn.Module):
         # 2. Arnold Phase-Gating (The Associative Memory Step)
         # This maps the linear projections onto the S1 circle manifold
         q_phase = self.arnold_q(q)
-        k_phase = self.arnold_k(k)
+        if self.K_phase:
+            k_phase = self.arnold_k(k)
+        else:
+            k_phase = k
         
         # 3. Phase-Locked Attention Calculation
         # Similarity is now based on whether token phases are synchronized
@@ -158,22 +162,30 @@ class ArnoldAttentionLayer(nn.Module):
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
-    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', attention_type='standard', Omega=0.618033988749895   , init_K=1.0):
+    def __init__(self, n_embd, n_head, block_size, dropout, activation_type='relu', 
+                 attention_type='standard', Omega=0.618033988749895, init_K=1.0, 
+                 residual_attention_mix=False, K_phase=False):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
         if attention_type == 'arnold':
-            self.sa = ArnoldAttentionLayer(n_embd, n_head, Omega, init_K)
-        else:
+            self.saa = ArnoldAttentionLayer(n_embd, n_head, Omega, init_K, K_phase)
+        if attention_type == 'standard' or residual_attention_mix is True:
             self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout)
         self.ffwd = FeedForward(n_embd, dropout, activation_type=activation_type)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
         self.attention_type = attention_type
+        self.residual_attention_mix = residual_attention_mix
+        self.K_phase = K_phase
 
     def forward(self, x):
         if self.attention_type == 'arnold':
-            x = x + self.sa(self.ln1(x))
+            x = self.ln1(x)
+            if self.residual_attention_mix:
+                x = x + self.saa(x) + self.sa(x)
+            else:
+                x = x + self.saa(x)
             x = x + self.ffwd(self.ln2(x))
         else:
             x = x + self.sa(self.ln1(x))
@@ -182,7 +194,9 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, activation_types=None, attention_types=None, positional_encoding=None, Omega=0.618033988749895   , init_K=1.0):
+    def __init__(self, vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
+                 activation_types=None, attention_types=None, positional_encoding=None, 
+                 Omega=0.618033988749895, init_K=1.0, residual_attention_mix=False, K_phase=False):
         super().__init__()
         self.device = device
         self.block_size = block_size
@@ -197,10 +211,14 @@ class GPT(nn.Module):
         # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         if positional_encoding == 'arnold':
-            self.positional_arnold = ArnoldActivation()
+            self.positional_arnold = ArnoldActivation(Omega=Omega, init_K=init_K) # , K_phase=K_phase)
         else:
             self.positional_encoding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, activation_type=activation_types[i], attention_type=attention_types[i], Omega=Omega, init_K=init_K) for i in range(n_layer)])
+        self.blocks = nn.ModuleList([Block(n_embd, n_head, block_size, dropout, 
+                                           activation_type=activation_types[i], 
+                                           attention_type=attention_types[i], 
+                                           Omega=Omega, init_K=init_K, 
+                                           residual_attention_mix=residual_attention_mix, K_phase=K_phase) for i in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
@@ -212,10 +230,9 @@ class GPT(nn.Module):
                 if hasattr(block.ffwd, 'activation'):
                     max_lyap = max(max_lyap, block.ffwd.activation.current_lyapunov)
             if self.attention_types is not None and self.attention_types[index] == 'arnold':
-                if block.sa.attention_type == 'arnold':
-                    max_lyap = max(max_lyap, block.sa.arnold_q.current_lyapunov)
-                    max_lyap = max(max_lyap, block.sa.arnold_k.current_lyapunov)
-                    
+                if block.saa.attention_type == 'arnold':
+                    max_lyap = max(max_lyap, block.saa.arnold_q.current_lyapunov)
+                    max_lyap = max(max_lyap, block.saa.arnold_k.current_lyapunov)                    
         if max_lyap < -10:
             max_lyap = 0.0
         return max_lyap
@@ -228,9 +245,9 @@ class GPT(nn.Module):
                 if hasattr(block.ffwd, 'activation'):
                     k_act.append(block.ffwd.activation.K.item())
             if self.attention_types is not None and self.attention_types[index] == 'arnold':
-                if block.sa.attention_type == 'arnold':
-                    k_att.append(block.sa.arnold_q.K.item())                    
-                    k_att.append(block.sa.arnold_k.K.item())                    
+                if block.saa.attention_type == 'arnold':
+                    k_att.append(block.saa.arnold_q.K.item())                    
+                    k_att.append(block.saa.arnold_k.K.item())                    
         return k_act, k_att
 
     def forward(self, idx, targets=None):

@@ -11,22 +11,24 @@ batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 128 # what is the maximum context length for predictions?
 max_iters = 100000
 eval_interval = 500
-learning_rate = 5e-4
+learning_rate = 1e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
 eval_iters = 50
 n_embd = 256
 n_head = 16
-n_layer = 16
+n_layer = 4
 dropout = 0.1
 activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
-attention_types = ['standard'] * n_layer # 'standard' or 'arnold'
-positional_encoding = 'standard' # 'standard' or 'arnold'
+attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
+positional_encoding = 'arnold' # 'standard' or 'arnold'
+residual_attention_mix = False
+K_phase = False
 middle = n_layer // 2
-attention_types[0] = 'arnold'
-attention_types[2] = 'arnold'
-attention_types[4] = 'arnold'
+# attention_types[0] = 'arnold'
+# attention_types[2] = 'arnold'
+# attention_types[4] = 'arnold'
 
 # activation_types[middle] = 'arnold'
 # activation_types[middle+1] = 'arnold'
@@ -52,7 +54,7 @@ if positional_encoding not in ['standard', 'arnold']:
 lyapunov_gov_beta = 5
 lyapunov_dampening_offset = -5
 Omega = 0.618033988749895
-init_K = 1.0
+init_K = 0.1
 # ------------
 
 torch.manual_seed(1337)
@@ -73,7 +75,8 @@ train_loader = DataLoader(text, tokenizer, block_size, batch_size, device, cache
 # Model
 model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device, 
             activation_types=activation_types, attention_types=attention_types,
-            positional_encoding=positional_encoding, Omega=Omega, init_K=init_K)
+            positional_encoding=positional_encoding, Omega=Omega, init_K=init_K,
+            residual_attention_mix=residual_attention_mix, K_phase=K_phase)
 m = model.to(device)
 
 print(model)
@@ -152,9 +155,10 @@ for iter in range(max_iters):
                         k_min = ki
                     if ki>k_max:
                         k_max = ki
-            k_mean = ks / kn
+            if kn>0:
+                k_mean = ks / kn
+            else:
+                k_mean = 0.0
             print(f"Iter {iter}: Max Lyap = {max_lyap:.4f}, LR = {new_lr:.6f}, K_min,max,avg = {k_min:.3f},{k_max:.3f},{k_mean:.3f}")
-                    # print(f"{kij:.3f} ", end="")
-                # print()
 
 print(f"Training finished in {time.time() - start_time:.2f} seconds")
