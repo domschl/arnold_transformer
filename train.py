@@ -118,9 +118,10 @@ for iter in range(max_iters):
 
         # Generate sample
         context = torch.zeros((1, 1), dtype=torch.long, device=device)
-        print(f"Generating sample at step {iter}...")
-        print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
-        print("-" * 50)
+        for temperature in [0.6, 0.8, 1.0]:
+            print(f"Generating sample at step {iter}, temperature={temperature}...")
+            print(tokenizer.decode(m.generate(context, max_new_tokens=100, temperature=temperature)[0].tolist()))
+            print("-" * 50)
 
     # sample a batch of data
     xb, yb = train_loader.get_batch('train')
