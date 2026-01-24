@@ -2,6 +2,7 @@ import os
 import torch
 import time
 import math
+import random
 from data_loader import load_text_data, Tokenizer, DataLoader
 from model import GPT
 
@@ -10,7 +11,7 @@ batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 128 # what is the maximum context length for predictions?
 max_iters = 100000
 eval_interval = 500
-learning_rate = 3e-4
+learning_rate = 1e-5
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.backends.mps.is_available():
     device = 'mps'
@@ -60,6 +61,7 @@ init_K = 0.8
 # ------------
 
 torch.manual_seed(1337)
+random.seed(1337)
 
 # Load data
 dataset_dir = os.path.join(os.path.dirname(__file__), 'dataset')

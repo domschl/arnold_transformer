@@ -3,12 +3,14 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
+import random
 
 class ArnoldActivation(nn.Module):
     def __init__(self, Omega=0.618033988749895, Omega_rnd_std=None, init_K=1.0):
         super().__init__()
         self.Omega = Omega
-        self.Omega_rnd_std = Omega_rnd_std
+        if Omega_rnd_std is not None:
+            self.Omega += random.normalvariate(mu=0.0, sigma=Omega_rnd_std)
         self.K = nn.Parameter(torch.tensor([float(init_K)]))
         self.current_lyapunov = 0.0
 
@@ -20,9 +22,6 @@ class ArnoldActivation(nn.Module):
             deriv = torch.abs(1 - k_val * torch.cos(2 * math.pi * x))
             self.current_lyapunov = torch.log(deriv + 1e-9).mean().item()
         Omega = self.Omega
-        if self.Omega_rnd_std is not None and self.training is True:
-            with torch.no_grad():
-                Omega = Omega + torch.normal(mean=torch.tensor([0.0]), std=torch.tensor([self.Omega_rnd_std])).item()
         out = x + Omega - (k_val / (2 * math.pi)) * torch.sin(2 * math.pi * x)
         return out % 1.0
 
