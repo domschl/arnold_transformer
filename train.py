@@ -1,4 +1,3 @@
-
 import os
 import torch
 import time
@@ -21,7 +20,7 @@ n_head = 16
 n_layer = 24
 dropout = 0.1
 activation_types = ['relu'] * n_layer # 'relu' or 'arnold'
-attention_types = ['arnold'] * n_layer # 'standard' or 'arnold'
+attention_types = ['standard'] * n_layer # 'standard' or 'arnold'
 positional_encoding = 'standard' # 'standard' or 'arnold'
 residual_attention_mix = False
 K_phase = False
@@ -56,8 +55,8 @@ if positional_encoding not in ['standard', 'arnold']:
 lyapunov_gov_beta = 5
 lyapunov_dampening_offset = -5
 Omega = 0.618033988749895
-Omega_rnd_std = 0.01
-init_K = 0.5
+Omega_rnd_std = 0.00001
+init_K = 0.8
 # ------------
 
 torch.manual_seed(1337)
@@ -82,7 +81,7 @@ model = GPT(vocab_size, n_embd, block_size, n_head, n_layer, dropout, device,
             residual_attention_mix=residual_attention_mix, K_phase=K_phase)
 m = model.to(device)
 
-print(model)
+# print(model)
 
 # print the number of parameters in the model
 print(str(sum(p.numel() for p in m.parameters())/1e6) + ' M parameters')
@@ -123,7 +122,7 @@ for iter in range(max_iters):
 
         # Generate sample
         context = torch.zeros((1, 1), dtype=torch.long, device=device)
-        for temperature in [1.0, 1.1, 1.2]:
+        for temperature in [1.0]:
             print(f"Generating sample at step {iter}, temperature={temperature}...")
             print(tokenizer.decode(m.generate(context, max_new_tokens=128, temperature=temperature)[0].tolist()))
             print("-" * 50)

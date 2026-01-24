@@ -20,8 +20,9 @@ class ArnoldActivation(nn.Module):
             deriv = torch.abs(1 - k_val * torch.cos(2 * math.pi * x))
             self.current_lyapunov = torch.log(deriv + 1e-9).mean().item()
         Omega = self.Omega
-        if self.Omega_rnd_std is not None:
-            Omega += torch.normal(mean=torch.tensor([0.0]), std=torch.tensor([self.Omega_rnd_std])).item() 
+        if self.Omega_rnd_std is not None and self.training is True:
+            with torch.no_grad():
+                Omega = Omega + torch.normal(mean=torch.tensor([0.0]), std=torch.tensor([self.Omega_rnd_std])).item()
         out = x + Omega - (k_val / (2 * math.pi)) * torch.sin(2 * math.pi * x)
         return out % 1.0
 
