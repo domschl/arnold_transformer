@@ -4,7 +4,12 @@ A PyTorch implementation of a GPT-style Transformer built from scratch. This pro
 
 > sail your transformer to the edge of chaos and beyond...
 
-We are going to use a non-linear activation function in its chaotic regime in the middle of a rather standard transformer stack. By carefully steering the chaotic behavior we receive greater expressivity due to the ability of the ArnoldActivation to learn its own coupling-strength parameter $K$.
+We are using a non-linear map—the Arnold Circle Map—in its chaotic regime within a Transformer architecture. This project explores its usage in three distinct scenarios:
+1. **As an Activation Function**: Replacing ReLU in feed-forward blocks.
+2. **As a Positional Encoding**: Generating dynamic position-aware embeddings.
+3. **As Arnold Attention**: Introducing phase-locking dynamics into the attention mechanism.
+
+By carefully steering the chaotic behavior, we aim to increase expressivity through the learnable coupling-strength parameter $K$.
 
 ## 🌟 Arnold Activation
 
@@ -78,20 +83,43 @@ uv run train.py
 
 You can configure the model architecture and training hyperparameters in `train.py`.
 
-**Layer-wise Activation configuration:**
-You can mix `ReLU` and `Arnold` layers. For example, to put Arnold activations in the middle layers of a 16-layer model:
+**Core Configuration:**
+You can configure the model architecture and training hyperparameters in `train.py`. The Arnold map can be applied in three distinct ways:
+
+### 1. As Activation Function
+Replace standard ReLU/GELU with the Arnold map in the Feed-Forward networks.
 
 ```python
-# in train.py
+# In train.py
 n_layer = 16
+# Mix ReLU and Arnold layers (e.g., middle layer is Arnold)
 activation_types = ['relu'] * n_layer
-middle = n_layer // 2
-activation_types[middle] = 'arnold'
-# ...
+activation_types[n_layer // 2] = 'arnold'
+```
+
+### 2. As Positional Encoding
+Use the Arnold map to generate dynamic positional embeddings based on token embeddings, instead of a static lookup table.
+
+```python
+# In train.py
+positional_encoding = 'arnold' # vs 'standard'
+```
+
+### 3. As Arnold Attention
+Replace standard Dot-Product Attention with "Phase-Locked Attention," where queries (and optionally keys) are passed through the Arnold map before attention scoring.
+
+```python
+# In train.py
+# Set attention type per layer
+attention_types = ['standard'] * n_layer
+attention_types[n_layer // 2] = 'arnold'
+
+# Optional: Enable Arnold map for Keys as well (Double Phase-Locking)
+K_phase = True 
 ```
 
 ## 📂 Project Structure
 
-- `model.py`: The GPT architecture and `ArnoldActivation` implementation.
+- `model.py`: The GPT architecture with `ArnoldActivation`, `ArnoldAttentionLayer`, and dynamic positional encoding logic.
 - `train.py`: Training loop, hyperparameter config, and Lyapunov governor logic.
 - `data_loader.py`: Handles loading text files and tokenization (using `tiktoken`).
